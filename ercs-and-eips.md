@@ -144,3 +144,21 @@ A third defense mints a small number of **dead shares** during initialization. T
 A more robust mitigation introduces a decimal offset, as implemented by [OpenZeppelin](https://docs.openzeppelin.com/contracts/5.x/erc4626). The core idea is to give shares significantly more decimal precision than the underlying asset.&#x20;
 
 By increasing share precision and incorporating virtual shares and assets, the vault starts with an <mark style="color:$warning;">anchored exchange rate</mark> that minimizes rounding effects. As a result, executing an inflation attack becomes economically impractical, requiring significantly more capital than the attacker could extract.
+
+This approach is widely regarded as a production-grade and mathematically elegant mitigation, as it requires only two additional constants to significantly strengthen the vault against inflation attacks.
+
+**Before:**
+
+```solidity
+shares = assets * totalSupply / totalAssets
+```
+
+**After:**
+
+```solidity
+uint256 private constant VIRTUAL_ASSETS = 1;
+uint256 private constant VIRTUAL_SHARES = 1e12; // decimal offset
+
+shares = assets * (totalSupply + VIRTUAL_SHARES)
+         / (totalAssets + VIRTUAL_ASSETS);
+```
