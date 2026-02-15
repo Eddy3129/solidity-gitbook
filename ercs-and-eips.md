@@ -92,3 +92,55 @@ It also introduces <mark style="color:$warning;">batch transfers and batch revoc
 Complementing this, the Uniswap Universal Router enables complex, multi-step operations — such as optimized swaps across multiple tokens and liquidity sources — to execute atomically in one call. This supports advanced routing strategies, including split execution across Uniswap V2 and V3, improving price efficiency while simplifying the overall user experience.
 
 Because these operations are atomic, any failure causes the entire transaction to revert, preventing partial execution and helping protect user funds.
+
+***
+
+### ERC-4626 (Tokenized Vaults)
+
+yield can fluctuate both positively and negatively. Imagine a vault targeting around 20% APR: Alice deposits 100 USDC, and Bob deposits 50 USDC months later. When they withdraw, how do we ensure Alice receives the amount she rightfully earned? Since returns are variable and not strictly time-based, we cannot rely on a simple formula like `deposit × APR × time`.
+
+Instead, vaults use a <mark style="color:$warning;">share-based accounting model</mark>. Depositors receive shares representing their <mark style="color:$warning;">proportional ownership</mark> of the vault, and as the vault gains or loses assets, the value of each share adjusts automatically. Rather than tracking yield per user, the vault tracks ownership—users redeem their shares for a corresponding portion of the vault’s assets, ensuring fair distribution of profits and losses regardless of deposit timing.
+
+By tracking the vault’s total assets and total shares, we can determine how many shares to mint on deposit and how many shares to burn on withdrawal. The conversion is based on the current share price, typically computed as the ratio of total shares to total assets.
+
+For a given asset amount `a`, the shares to mint or burn can be calculated as:
+
+<mark style="color:yellow;">**s = (a × T) / A**</mark>
+
+where  `T` is the total shares outstanding,  `s` is the number of shares to mint or burn, and `A` is the total assets in the vault.
+
+Also a big shout out to [Smart Contract Programmer](https://youtu.be/k7WNibJOBXE) for these visualizations and detailed explanations.
+
+<figure><img src=".gitbook/assets/image (1).png" alt="" width="563"><figcaption></figcaption></figure>
+
+<figure><img src=".gitbook/assets/image (2).png" alt="" width="563"><figcaption></figcaption></figure>
+
+Now that we understand the basics of how vaults operate, we need a way to standardize this behavior in smart contracts so that different protocols can integrate with them reliably. ERC-4626 provides this standard by defining a common interface for tokenized vaults.&#x20;
+
+ERC-4626 organizes vault interactions into several key function groups.&#x20;
+
+<table data-header-hidden><thead><tr><th width="116.77783203125">Category</th><th width="285.4444580078125">Example Functions</th><th>Purpose</th></tr></thead><tbody><tr><td><strong>Category</strong></td><td><strong>Example Functions</strong></td><td><strong>Purpose</strong></td></tr><tr><td><strong>Convert</strong></td><td><code>convertToShares</code>, <code>convertToAssets</code></td><td>Provides a read-only, fee-neutral exchange rate between assets and shares</td></tr><tr><td><strong>Preview</strong></td><td><code>previewDeposit</code>, <code>previewMint</code>, <code>previewWithdraw</code>, <code>previewRedeem</code></td><td>Simulates the result of a transaction without changing state</td></tr><tr><td><strong>Max (Limit)</strong></td><td><code>maxDeposit</code>, <code>maxMint</code>, <code>maxWithdraw</code>, <code>maxRedeem</code></td><td>View the current max allowed interaction for the user</td></tr><tr><td><strong>Execution</strong></td><td><code>deposit</code>, <code>mint</code>, <code>withdraw</code>, <code>redeem</code></td><td>Performs the actual asset transfer and mints/burns shares</td></tr></tbody></table>
+
+[The Ethereum documentation](https://ethereum.org/developers/docs/standards/tokens/erc-4626/) offers a well-crafted summary of the core functions that every ERC-4626 vault should implement:
+
+<figure><img src=".gitbook/assets/image (3).png" alt="" width="563"><figcaption></figcaption></figure>
+
+However, ERC-4626 vaults can be vulnerable to an <mark style="color:$danger;">**inflation attack**</mark>. In this attack, a malicious actor frontruns the first deposit by contributing a small amount of assets to mint shares, then donates a large amount directly to the vault without receiving additional shares.&#x20;
+
+This manipulation skews the vault’s exchange rate, causing subsequent small deposits to round down to zero shares. When a vault is empty or holds very few assets, an attacker can manipulate the exchange rate with relatively little capital, effectively turning victim deposits into donations.
+
+The attacking flow can be represented as below:
+
+<figure><img src=".gitbook/assets/image.png" alt=""><figcaption></figcaption></figure>
+
+After acquiring an initial majority of shares, the attacker artificially increases the vault’s total assets by donating funds directly to the contract. Because this donation does not mint new shares, the attacker retains a dominant ownership percentage while drastically skewing the exchange rate. When a victim later deposits an amount that is small relative to the inflated vault balance, the share calculation may round down to zero, effectively turning the deposit into a donation that benefits the attacker.
+
+Several mitigations exist to protect vaults from inflation attacks. One approach enforces a **minimum share** threshold for deposits, <mark style="color:$warning;">reverting transactions that would mint too few shares</mark> and preventing deposits from rounding down to zero.
+
+Another method uses **internal accounting** to track deposited assets instead of relying on the raw token balance. Because <mark style="color:$warning;">direct donations bypass deposit logic, excluding them</mark> prevents attackers from artificially inflating the exchange rate.
+
+A third defense mints a small number of **dead shares** during initialization. These permanently locked shares ensure the <mark style="color:$warning;">total supply is never near zero</mark>, making it expensive for an attacker to gain dominant ownership and reducing the profitability of donation-based manipulation.
+
+A more robust mitigation introduces a decimal offset, as implemented by [OpenZeppelin](https://docs.openzeppelin.com/contracts/5.x/erc4626). The core idea is to give shares significantly more decimal precision than the underlying asset.&#x20;
+
+By increasing share precision and incorporating virtual shares and assets, the vault starts with an <mark style="color:$warning;">anchored exchange rate</mark> that minimizes rounding effects. As a result, executing an inflation attack becomes economically impractical, requiring significantly more capital than the attacker could extract.

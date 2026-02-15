@@ -24,7 +24,7 @@ A virtual machine is software that acts as an abstraction layer between code and
 
 The EVM is the runtime environment for executing smart contracts. It executes programs that have been compiled into EVM Opcodes, which behave similarly to assembly instructions. For every function call, the opcodes are processed on the EVM stack, while accessing data from storage (persistent on-chain state variables) or memory (temporary data during function calls).
 
-<figure><img src=".gitbook/assets/image.png" alt=""><figcaption></figcaption></figure>
+<figure><img src=".gitbook/assets/image (4).png" alt=""><figcaption></figcaption></figure>
 
 _The EVM architecture, from_ [_https://www.saxenism.com/blog/evm-deep-dive_](https://www.saxenism.com/blog/evm-deep-dive)
 

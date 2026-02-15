@@ -73,7 +73,7 @@ Unlike a regular external call, `delegatecall` executes the implementation’s c
 
 This effectively turns the Dispatcher into a universal execution router. Because execution occurs in the Dispatcher’s storage context, <mark style="color:$warning;">the implementation does not store or return state</mark> <mark style="color:$warning;">— it directly reads from and writes to the proxy’s storage</mark>. As a result, upgrading the implementation changes the contract’s behavior while preserving its state.
 
-<div data-full-width="true"><figure><img src=".gitbook/assets/image (1).png" alt=""><figcaption></figcaption></figure></div>
+<div data-full-width="true"><figure><img src=".gitbook/assets/image (1) (1).png" alt=""><figcaption></figcaption></figure></div>
 
 This pattern established an important constraint: <mark style="color:$primary;">implementation contracts should not use constructors</mark>. Instead, state must be initialized through an initializer function invoked by the dispatcher via `delegatecall`. Because the initializer writes to the dispatcher’s storage, it must be protected to ensure it can only be executed once.
 
